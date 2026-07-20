@@ -1921,7 +1921,6 @@
       document.body.appendChild(t);
       setTimeout(() => { t.style.transition="opacity .3s"; t.style.opacity="0"; setTimeout(() => t.remove(), 350); }, 3000);
     }
-    }
 
     function getVisibleRanking() {
       return [...state.players].filter(p => p.days > 0).sort((a, b) => {
@@ -2603,3 +2602,4 @@
   </script>
 </body>
 </html>
+
