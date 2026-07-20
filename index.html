@@ -295,6 +295,13 @@
     <div class="loading-bar"><div class="loading-bar-inner"></div></div>
     <div class="loading-sub" id="loadingStatus">Connexion à Supabase…</div>
   </div>
+  <script>
+    // Filet de sécurité : cache l'écran de chargement après 8s dans tous les cas
+    setTimeout(function() {
+      var s = document.getElementById('loadingScreen');
+      if (s) { s.style.opacity = '0'; s.style.transition = 'opacity .4s'; setTimeout(function(){ if(s) s.remove(); }, 450); }
+    }, 8000);
+  </script>
   <header>
     <div class="title">🏆 Acostanque</div>
     <div class="subtitle">Les Acosteurs — journées, tournois et classement saison</div>
@@ -1105,25 +1112,23 @@
         const statusEl = document.getElementById("loadingStatus");
         if (statusEl) statusEl.textContent = "Récupération des données…";
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        let data, error;
-        try {
-          ({ data, error } = await supabaseClient
+        const timedQuery = new Promise(function(resolve) {
+          supabaseClient
             .from("season_state")
             .select("data")
             .eq("id", SEASON_ROW_ID)
-            .abortSignal(controller.signal)
-            .single());
-        } finally {
-          clearTimeout(timeoutId);
-        }
+            .single()
+            .then(resolve)
+            .catch(function(e) { resolve({ data: null, error: e }); });
+          setTimeout(function() { resolve({ data: null, error: new Error("Timeout") }); }, 8000);
+        });
+
+        const { data, error } = await timedQuery;
 
         if (error) {
           console.error("Erreur chargement Supabase :", error);
-          if (statusEl) statusEl.textContent = navigator.onLine ? "Erreur — données locales utilisées" : "Hors ligne — données locales utilisées";
-          updateSyncStatus(navigator.onLine ? "Erreur lecture" : "Hors ligne", "offline");
+          if (statusEl) statusEl.textContent = error.message === "Timeout" ? "Délai dépassé — données locales utilisées" : "Erreur — données locales utilisées";
+          updateSyncStatus("Hors ligne", "offline");
           return;
         }
 
