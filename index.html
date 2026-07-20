@@ -1105,11 +1105,20 @@
         const statusEl = document.getElementById("loadingStatus");
         if (statusEl) statusEl.textContent = "Récupération des données…";
 
-        const { data, error } = await supabaseClient
-          .from("season_state")
-          .select("data")
-          .eq("id", SEASON_ROW_ID)
-          .single();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let data, error;
+        try {
+          ({ data, error } = await supabaseClient
+            .from("season_state")
+            .select("data")
+            .eq("id", SEASON_ROW_ID)
+            .abortSignal(controller.signal)
+            .single());
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (error) {
           console.error("Erreur chargement Supabase :", error);
@@ -2551,34 +2560,38 @@
     }
 
     async function initApp() {
-      restoreDarkMode();
-      await loadState();
-      document.getElementById("dayDateInput").value = todayStr();
-      setTeamSize(state.teamSize || 2);
-      renderAll();
-      showTab("home");
-      subscribeToSeason();
-      startAutoSave();
+      try {
+        restoreDarkMode();
+        await loadState();
+        document.getElementById("dayDateInput").value = todayStr();
+        setTeamSize(state.teamSize || 2);
+        renderAll();
+        showTab("home");
+        subscribeToSeason();
+        startAutoSave();
 
-      // Masquer l'écran de chargement
-      const screen = document.getElementById("loadingScreen");
-      if (screen) {
-        screen.classList.add("fade-out");
-        setTimeout(() => screen.remove(), 450);
+        window.addEventListener("beforeunload", () => {
+          try {
+            if (state.currentTournament) {
+              const raw = localStorage.getItem(STORAGE_KEY);
+              const cache = raw ? JSON.parse(raw) : {};
+              cache.currentTournament = state.currentTournament;
+              cache.cachedAt = new Date().toISOString();
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+            }
+          } catch(e) {}
+        });
+
+      } catch(e) {
+        console.error("Erreur initApp :", e);
+      } finally {
+        // Masquer l'écran de chargement dans tous les cas
+        const screen = document.getElementById("loadingScreen");
+        if (screen) {
+          screen.classList.add("fade-out");
+          setTimeout(() => screen.remove(), 450);
+        }
       }
-
-      // Flush les scores dans localStorage avant fermeture de page
-      window.addEventListener("beforeunload", () => {
-        try {
-          if (state.currentTournament) {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            const cache = raw ? JSON.parse(raw) : {};
-            cache.currentTournament = state.currentTournament;
-            cache.cachedAt = new Date().toISOString();
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-          }
-        } catch(e) {}
-      });
     }
 
     initApp();
